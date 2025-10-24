@@ -1488,9 +1488,9 @@
                 [pdfViewCtrl DocLock:YES];
 
                 // Get the scrollable content dimensions (canvas size)
-                CGSize contentSize = pdfViewCtrl.contentSize;
-                double width = contentSize.width;
-                double height = contentSize.height;
+                PTPDFRect *canvasRect = [pdfViewCtrl GetCanvasBBox];
+                double width = [canvasRect GetWidth];
+                double height = [canvasRect GetHeight];
 
                 NSDictionary *resultDict = @{
                     @"zoom": zoom,
