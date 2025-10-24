@@ -86,6 +86,7 @@ public class FlutterDocumentActivity extends DocumentActivity implements ViewerC
     private static AtomicReference<EventSink> sPageMovedEventEmitter = new AtomicReference<>();
     private static AtomicReference<EventSink> sAnnotationToolbarItemPressedEventEmitter = new AtomicReference<>();
     private static AtomicReference<EventSink> sScrollChangedEventEmitter = new AtomicReference<>();
+    private static AtomicReference<EventSink> sDocumentSizeChangedEventEmitter = new AtomicReference<>();
 
     // Hygen Generated Event Listeners (1)
     private static AtomicReference<EventSink> sAppBarButtonPressedEventEmitter = new AtomicReference<>();
@@ -261,6 +262,10 @@ public class FlutterDocumentActivity extends DocumentActivity implements ViewerC
         sScrollChangedEventEmitter.set(emitter);
     }
 
+    public static void setDocumentSizeChangedEventEmitter(EventSink emitter) {
+        sDocumentSizeChangedEventEmitter.set(emitter);
+    }
+
     // Hygen Generated Event Listeners (2)
     public static void setAppBarButtonPressedEventEmitter(EventSink emitter) {
         sAppBarButtonPressedEventEmitter.set(emitter);
@@ -352,6 +357,9 @@ public class FlutterDocumentActivity extends DocumentActivity implements ViewerC
     @Override
     public EventSink getScrollChangedEventEmitter() { return sScrollChangedEventEmitter.get(); }
 
+    @Override
+    public EventSink getDocumentSizeChangedEventEmitter() { return sDocumentSizeChangedEventEmitter.get(); }
+
     // Hygen Generated Event Listeners (3)
     @Override
     public EventSink getAppBarButtonPressedEventEmitter() {
@@ -438,6 +446,7 @@ public class FlutterDocumentActivity extends DocumentActivity implements ViewerC
         sPageMovedEventEmitter.set(null);
         sAnnotationToolbarItemPressedEventEmitter.set(null);
         sScrollChangedEventEmitter.set(null);
+        sDocumentSizeChangedEventEmitter.set(null);
 
         // Hygen Generated Event Listeners (4)
         sAppBarButtonPressedEventEmitter.set(null);

@@ -21,6 +21,7 @@
 @property (nonatomic, strong) FlutterEventSink zoomChangedEventSink;
 @property (nonatomic, strong) FlutterEventSink pageMovedEventSink;
 @property (nonatomic, strong) FlutterEventSink scrollChangedEventSink;
+@property (nonatomic, strong) FlutterEventSink documentSizeChangedEventSink;
 @property (nonatomic, strong) FlutterEventSink annotationToolbarItemPressedEventSink;
 // Hygen Generated Event Listeners (1)
 @property (nonatomic, strong) FlutterEventSink appBarButtonPressedEventSink;
@@ -157,6 +158,8 @@
 
     FlutterEventChannel* scrollChangedEventChannel = [FlutterEventChannel eventChannelWithName:PTScrollChangedEventKey binaryMessenger:messenger];
 
+    FlutterEventChannel* documentSizeChangedEventChannel = [FlutterEventChannel eventChannelWithName:PTDocumentSizeChangedEventKey binaryMessenger:messenger];
+
     [xfdfEventChannel setStreamHandler:self];
     
     [bookmarkEventChannel setStreamHandler:self];
@@ -186,6 +189,8 @@
     [pageMovedEventChannel setStreamHandler:self];
 
     [scrollChangedEventChannel setStreamHandler:self];
+
+    [documentSizeChangedEventChannel setStreamHandler:self];
 
     // Hygen Generated Event Listeners (2)
     FlutterEventChannel* annotationToolbarItemPressedEventChannel = [FlutterEventChannel eventChannelWithName:PTAnnotationToolbarItemPressedEventKey binaryMessenger:messenger];
@@ -1274,6 +1279,9 @@
         case scrollChangedId:
             self.scrollChangedEventSink = events;
             break;
+        case documentSizeChangedId:
+            self.documentSizeChangedEventSink = events;
+            break;
         // Hygen Generated Event Listeners (3)
         case annotationToolbarItemPressedId:
             self.annotationToolbarItemPressedEventSink = events;
@@ -1336,6 +1344,9 @@
             break;
         case scrollChangedId:
             self.scrollChangedEventSink = nil;
+            break;
+        case documentSizeChangedId:
+            self.documentSizeChangedEventSink = nil;
             break;
         // Hygen Generated Event Listeners (4)
         case annotationToolbarItemPressedId:
@@ -1485,7 +1496,7 @@
 -(void)documentController:(PTDocumentController *)docVC scrollChanged:(NSString *)scrollString
 {
     PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
-    
+
     double horizontal = [pdfViewCtrl GetHScrollPos];
     double vertical = [pdfViewCtrl GetVScrollPos];
 
@@ -1497,6 +1508,45 @@
     if (self.scrollChangedEventSink != nil)
     {
         self.scrollChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
+    }
+}
+
+-(void)documentController:(PTDocumentController *)docVC documentSizeChanged:(NSString *)sizeString
+{
+    PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
+
+    if (pdfViewCtrl == nil) {
+        return;
+    }
+
+    @try {
+        [pdfViewCtrl DocLock:YES];
+
+        int currentPage = [pdfViewCtrl GetCurrentPage];
+        PTPDFDoc *doc = [pdfViewCtrl GetDoc];
+
+        if (doc != nil && currentPage > 0) {
+            PTPage *page = [doc GetPage:currentPage];
+            PTRect *cropBox = [page GetCropBox];
+
+            double width = [cropBox Width];
+            double height = [cropBox Height];
+
+            NSDictionary *resultDict = @{
+                PTWidthKey: [NSNumber numberWithDouble:width],
+                PTHeightKey: [NSNumber numberWithDouble:height],
+            };
+
+            if (self.documentSizeChangedEventSink != nil) {
+                self.documentSizeChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
+            }
+        }
+    }
+    @catch (NSException *exception) {
+        NSLog(@"Error getting document size: %@", exception);
+    }
+    @finally {
+        [pdfViewCtrl DocUnlock];
     }
 }
 

@@ -28,6 +28,7 @@ import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_LEADING_NAV_B
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_LONG_PRESS_MENU_PRESSED;
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_PAGE_CHANGED;
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_SCROLL_CHANGED;
+import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_DOCUMENT_SIZE_CHANGED;
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_ZOOM_CHANGED;
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_PAGE_MOVED;
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_ANNOTATION_TOOLBAR_ITEM_PRESSED;
@@ -269,6 +270,19 @@ public class FlutterDocumentView implements PlatformView, MethodChannel.MethodCa
             @Override
             public void onCancel(Object arguments) {
                 documentView.setScrollChangedEventEmitter(null);
+            }
+        });
+
+        final EventChannel documentSizeChangedEventChannel = new EventChannel(messenger, EVENT_DOCUMENT_SIZE_CHANGED);
+        documentSizeChangedEventChannel.setStreamHandler(new EventChannel.StreamHandler() {
+            @Override
+            public void onListen(Object arguments, EventChannel.EventSink emitter) {
+                documentView.setDocumentSizeChangedEventEmitter(emitter);
+            }
+
+            @Override
+            public void onCancel(Object arguments) {
+                documentView.setDocumentSizeChangedEventEmitter(null);
             }
         });
 

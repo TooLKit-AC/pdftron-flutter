@@ -280,6 +280,7 @@ public class PluginUtils {
     public static final String EVENT_PAGE_MOVED = "page_moved_event";
     public static final String EVENT_ANNOTATION_TOOLBAR_ITEM_PRESSED = "annotation_toolbar_item_pressed_event";
     public static final String EVENT_SCROLL_CHANGED = "scroll_changed_event";
+    public static final String EVENT_DOCUMENT_SIZE_CHANGED = "document_size_changed_event";
     // Hygen Generated Event Listeners
     public static final String EVENT_APP_BAR_BUTTON_PRESSED = "app_bar_button_pressed_event";
 

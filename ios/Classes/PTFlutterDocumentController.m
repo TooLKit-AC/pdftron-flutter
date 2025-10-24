@@ -88,6 +88,9 @@ static BOOL PT_addMethod(Class cls, SEL selector, void (^block)(id))
         } else {
             [self.plugin documentController:self documentLoadedFromFilePath:nil];
         }
+
+        // Send document size when document is loaded
+        [self.plugin documentController:self documentSizeChanged:nil];
     }
     
     if (![self.toolManager isReadonly] && self.readOnly) {
@@ -656,6 +659,9 @@ static BOOL PT_addMethod(Class cls, SEL selector, void (^block)(id))
     };
 
     [self.plugin documentController:self pageChanged:[PdftronFlutterPlugin PT_idToJSONString:resultDict]];
+
+    // Send document size when page changes
+    [self.plugin documentController:self documentSizeChanged:nil];
 }
 
 - (void)pdfViewCtrl:(PTPDFViewCtrl *)pdfViewCtrl pdfScrollViewDidScroll:(UIScrollView *)scrollView

@@ -35,6 +35,7 @@ const _pageMovedChannel = const EventChannel('page_moved_event');
 const _annotationToolbarItemPressedChannel =
     const EventChannel('annotation_toolbar_item_pressed_event');
 const _scrollChangedChannel = const EventChannel('scroll_changed_event');
+const _documentSizeChangedChannel = const EventChannel('document_size_changed_event');
 
 // Hygen Generated Event Listeners (1)
 const _appBarButtonPressedChannel = const EventChannel('app_bar_button_pressed_event');
@@ -129,6 +130,11 @@ typedef void AnnotationToolbarItemPressedListener(dynamic id);
 /// position.
 typedef void ScrollChangedListener(dynamic horizontal, dynamic vertical);
 
+/// A listener used as the argument for [startDocumentSizeChangedListener].
+///
+/// Gets the [width] and [height] of the document in the current page.
+typedef void DocumentSizeChangedListener(dynamic width, dynamic height);
+
 // Hygen Generated Event Listeners (2)
 
 /// A listener used as the argument for [startAppBarButtonPressedListener].
@@ -156,6 +162,7 @@ enum eventSinkId {
   pageMovedId,
   scrollChangedId,
   annotationToolbarItemPressedId,
+  documentSizeChangedId,
 
   // Hygen Generated Event Listeners (3)
   appBarButtonPressedId,
@@ -562,6 +569,30 @@ CancelListener startScrollChangedListener(ScrollChangedListener listener) {
     dynamic horizontal = scrollObject['horizontal'];
     dynamic vertical = scrollObject['vertical'];
     listener(horizontal, vertical);
+  }, cancelOnError: true);
+
+  return () {
+    subscription.cancel();
+  };
+}
+
+/// Listens for when the document size changes.
+///
+/// ```dart
+/// var documentSizeChangedCancel = startDocumentSizeChangedListener((width, height) {
+///   print('flutter document size: width=$width, height=$height');
+/// });
+/// ```
+///
+/// Returns a function that can cancel the listener.
+CancelListener startDocumentSizeChangedListener(DocumentSizeChangedListener listener) {
+  var subscription = _documentSizeChangedChannel
+      .receiveBroadcastStream(eventSinkId.documentSizeChangedId.index)
+      .listen((sizeString) {
+    dynamic sizeObject = jsonDecode(sizeString);
+    dynamic width = sizeObject['width'];
+    dynamic height = sizeObject['height'];
+    listener(width, height);
   }, cancelOnError: true);
 
   return () {

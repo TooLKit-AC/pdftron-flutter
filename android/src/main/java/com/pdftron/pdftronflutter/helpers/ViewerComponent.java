@@ -86,6 +86,8 @@ public interface ViewerComponent {
     
     EventChannel.EventSink getScrollChangedEventEmitter();
 
+    EventChannel.EventSink getDocumentSizeChangedEventEmitter();
+
     // Hygen Generated Event Listeners
     EventChannel.EventSink getAppBarButtonPressedEventEmitter();
 

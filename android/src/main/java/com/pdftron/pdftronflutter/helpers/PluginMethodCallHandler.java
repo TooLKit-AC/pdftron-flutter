@@ -14,6 +14,7 @@ import io.flutter.plugin.common.MethodChannel.Result;
 
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_APP_BAR_BUTTON_PRESSED;
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_SCROLL_CHANGED;
+import static com.pdftron.pdftronflutter.helpers.PluginUtils.EVENT_DOCUMENT_SIZE_CHANGED;
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.FUNCTION_GET_PLATFORM_VERSION;
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.FUNCTION_GET_VERSION;
 import static com.pdftron.pdftronflutter.helpers.PluginUtils.FUNCTION_INITIALIZE;
@@ -247,7 +248,7 @@ public class PluginMethodCallHandler implements MethodCallHandler {
         });
         
         final EventChannel scrollChangedEventChanel = new EventChannel(messenger, EVENT_SCROLL_CHANGED);
-        pageMovedEventChanel.setStreamHandler(new EventChannel.StreamHandler() {
+        scrollChangedEventChanel.setStreamHandler(new EventChannel.StreamHandler() {
             @Override
             public void onListen(Object arguments, EventChannel.EventSink emitter) {
                 FlutterDocumentActivity.setScrollChangedEventEmitter(emitter);
@@ -256,6 +257,19 @@ public class PluginMethodCallHandler implements MethodCallHandler {
             @Override
             public void onCancel(Object arguments) {
                 FlutterDocumentActivity.setScrollChangedEventEmitter(null);
+            }
+        });
+
+        final EventChannel documentSizeChangedEventChannel = new EventChannel(messenger, EVENT_DOCUMENT_SIZE_CHANGED);
+        documentSizeChangedEventChannel.setStreamHandler(new EventChannel.StreamHandler() {
+            @Override
+            public void onListen(Object arguments, EventChannel.EventSink emitter) {
+                FlutterDocumentActivity.setDocumentSizeChangedEventEmitter(emitter);
+            }
+
+            @Override
+            public void onCancel(Object arguments) {
+                FlutterDocumentActivity.setDocumentSizeChangedEventEmitter(null);
             }
         });
 

@@ -90,6 +90,7 @@ public class DocumentView extends com.pdftron.pdf.controls.DocumentView2 impleme
     private EventChannel.EventSink sPageMovedEventEmitter;
     private EventChannel.EventSink sAnnotationToolbarItemPressedEventEmitter;
     private EventChannel.EventSink sScrollChangedEventEmitter;
+    private EventChannel.EventSink sDocumentSizeChangedEventEmitter;
 
     // Hygen Generated Event Listeners (1)
     private EventChannel.EventSink sAppBarButtonPressedEventEmitter;
@@ -413,6 +414,10 @@ public class DocumentView extends com.pdftron.pdf.controls.DocumentView2 impleme
         sScrollChangedEventEmitter = emitter;
     }
 
+    public void setDocumentSizeChangedEventEmitter(EventChannel.EventSink emitter) {
+        sDocumentSizeChangedEventEmitter = emitter;
+    }
+
     // Hygen Generated Event Listeners (2)
     public void setAppBarButtonPressedEventEmitter(EventChannel.EventSink emitter) {
         sAppBarButtonPressedEventEmitter = emitter;
@@ -501,6 +506,9 @@ public class DocumentView extends com.pdftron.pdf.controls.DocumentView2 impleme
 
     @Override
     public EventChannel.EventSink getScrollChangedEventEmitter() { return sScrollChangedEventEmitter; }
+
+    @Override
+    public EventChannel.EventSink getDocumentSizeChangedEventEmitter() { return sDocumentSizeChangedEventEmitter; }
 
     // Hygen Generated Event Listeners (3)
     @Override

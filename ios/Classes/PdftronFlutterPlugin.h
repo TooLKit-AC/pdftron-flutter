@@ -334,6 +334,7 @@ static NSString * const PTPageChangedEventKey = @"page_changed_event";
 static NSString * const PTZoomChangedEventKey = @"zoom_changed_event";
 static NSString * const PTPageMovedEventKey = @"page_moved_event";
 static NSString *const PTScrollChangedEventKey = @"scroll_changed_event";
+static NSString *const PTDocumentSizeChangedEventKey = @"document_size_changed_event";
 
 // Hygen Generated Event Listeners (1)
 static NSString * const PTAnnotationToolbarItemPressedEventKey = @"annotation_toolbar_item_pressed_event";
@@ -513,6 +514,7 @@ typedef enum
     pageMovedId,
     // Hygen Generated Event Listeners (2)
     scrollChangedId,
+    documentSizeChangedId,
     annotationToolbarItemPressedId,
     appBarButtonPressedId,
 } EventSinkId;
@@ -540,6 +542,7 @@ typedef enum
 - (void)documentController:(PTDocumentController *)docVC zoomChanged:(NSNumber *)zoom;
 - (void)documentController:(PTDocumentController *)docVC pageMoved:(NSString *)pageNumbersString;
 - (void)documentController:(PTDocumentController *)docVC scrollChanged:(NSString*)scrollString;
+- (void)documentController:(PTDocumentController *)docVC documentSizeChanged:(NSString*)sizeString;
 // Hygen Generated Event Listeners (3)
 - (void)documentController:(PTDocumentController *)docVC annotationToolbarItemPressed:(NSString *)annotationToolbarItemPressedId;
 - (void)documentController:(PTDocumentController *)docVC appBarButtonPressed:(NSString *)appBarButtonPressedString;
