@@ -1481,7 +1481,46 @@
 {
     if (self.zoomChangedEventSink != nil)
     {
-        self.zoomChangedEventSink(zoom);
+        PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
+
+        if (pdfViewCtrl != nil) {
+            @try {
+                [pdfViewCtrl DocLock:YES];
+
+                int currentPage = [pdfViewCtrl GetCurrentPage];
+                PTPDFDoc *doc = [pdfViewCtrl GetDoc];
+
+                double width = 0;
+                double height = 0;
+
+                if (doc != nil && currentPage > 0) {
+                    PTPage *page = [doc GetPage:currentPage];
+                    PTPDFRect *cropBox = [page GetCropBox];
+                    width = [cropBox GetX2] - [cropBox GetX1];
+                    height = [cropBox GetY2] - [cropBox GetY1];
+                }
+                
+
+                NSDictionary *resultDict = @{
+                    @"zoom": zoom,
+                    PTWidthKey: [NSNumber numberWithDouble:width],
+                    PTHeightKey: [NSNumber numberWithDouble:height],
+                };
+
+                self.zoomChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
+            }
+            @catch (NSException *exception) {
+                NSLog(@"[PDFTron] Error in zoomChanged: %@", exception);
+                // Fallback to old format
+                self.zoomChangedEventSink(zoom);
+            }
+            @finally {
+                [pdfViewCtrl DocUnlock];
+            }
+        } else {
+            // Fallback to old format if no pdfViewCtrl
+            self.zoomChangedEventSink(zoom);
+        }
     }
 }
 
@@ -1513,9 +1552,12 @@
 
 -(void)documentController:(PTDocumentController *)docVC documentSizeChanged:(NSString *)sizeString
 {
+    NSLog(@"[PDFTron] documentSizeChanged called");
+
     PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
 
     if (pdfViewCtrl == nil) {
+        NSLog(@"[PDFTron] pdfViewCtrl is nil");
         return;
     }
 
@@ -1525,6 +1567,8 @@
         int currentPage = [pdfViewCtrl GetCurrentPage];
         PTPDFDoc *doc = [pdfViewCtrl GetDoc];
 
+        NSLog(@"[PDFTron] Current page: %d", currentPage);
+
         if (doc != nil && currentPage > 0) {
             PTPage *page = [doc GetPage:currentPage];
             PTPDFRect *cropBox = [page GetCropBox];
@@ -1532,18 +1576,23 @@
             double width = [cropBox GetX2] - [cropBox GetX1];
             double height = [cropBox GetY2] - [cropBox GetY1];
 
+            NSLog(@"[PDFTron] Document size: %.2f x %.2f", width, height);
+
             NSDictionary *resultDict = @{
                 PTWidthKey: [NSNumber numberWithDouble:width],
                 PTHeightKey: [NSNumber numberWithDouble:height],
             };
 
             if (self.documentSizeChangedEventSink != nil) {
+                NSLog(@"[PDFTron] Sending document size event");
                 self.documentSizeChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
+            } else {
+                NSLog(@"[PDFTron] documentSizeChangedEventSink is nil - listener not registered");
             }
         }
     }
     @catch (NSException *exception) {
-        NSLog(@"Error getting document size: %@", exception);
+        NSLog(@"[PDFTron] Error getting document size: %@", exception);
     }
     @finally {
         [pdfViewCtrl DocUnlock];

@@ -19,6 +19,7 @@ import io.flutter.plugin.common.EventChannel;
 public class FlutterPdfViewCtrlTabFragment extends PdfViewCtrlTabFragment2 {
 
     private ViewerComponent mViewerComponent;
+    private double mLastZoom = -1;
 
     public void setViewerComponent(@NonNull ViewerComponent component) {
         mViewerComponent = component;
@@ -41,6 +42,62 @@ public class FlutterPdfViewCtrlTabFragment extends PdfViewCtrlTabFragment2 {
                 eventSink.success(jsonObject.toString());
             }
         }
+
+        // Check for zoom change
+        checkZoomChanged();
+    }
+
+    private void checkZoomChanged() {
+        PDFViewCtrl pdfViewCtrl = getPDFViewCtrl();
+        if (pdfViewCtrl != null && mViewerComponent != null) {
+            double currentZoom = pdfViewCtrl.getZoom();
+            if (mLastZoom != currentZoom) {
+                mLastZoom = currentZoom;
+                sendZoomChanged(currentZoom);
+            }
+        }
+    }
+
+    private void sendZoomChanged(double zoom) {
+        EventChannel.EventSink eventSink = mViewerComponent.getZoomChangedEventEmitter();
+        if (eventSink == null) {
+            return;
+        }
+
+        PDFViewCtrl pdfViewCtrl = getPDFViewCtrl();
+        if (pdfViewCtrl == null) {
+            return;
+        }
+
+        try {
+            pdfViewCtrl.docLock(true);
+            int currentPage = pdfViewCtrl.getCurrentPage();
+            Page page = pdfViewCtrl.getDoc().getPage(currentPage);
+            Rect pageRect = page.getCropBox();
+
+            double width = pageRect.getWidth();
+            double height = pageRect.getHeight();
+
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("zoom", zoom);
+            jsonObject.put("width", width);
+            jsonObject.put("height", height);
+
+            eventSink.success(jsonObject.toString());
+        } catch (Exception e) {
+            // Fallback to old format
+            try {
+                eventSink.success(zoom);
+            } catch (Exception ignored) {
+            }
+        } finally {
+            try {
+                if (pdfViewCtrl != null) {
+                    pdfViewCtrl.docUnlock();
+                }
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     @Override
@@ -59,17 +116,22 @@ public class FlutterPdfViewCtrlTabFragment extends PdfViewCtrlTabFragment2 {
     }
 
     private void sendDocumentSize(int pageNumber) {
+        android.util.Log.d("FlutterPdfFragment", "sendDocumentSize called for page: " + pageNumber);
+
         if (mViewerComponent == null) {
+            android.util.Log.e("FlutterPdfFragment", "mViewerComponent is null");
             return;
         }
 
         EventChannel.EventSink eventSink = mViewerComponent.getDocumentSizeChangedEventEmitter();
         if (eventSink == null) {
+            android.util.Log.e("FlutterPdfFragment", "eventSink is null - listener not registered");
             return;
         }
 
         PDFViewCtrl pdfViewCtrl = getPDFViewCtrl();
         if (pdfViewCtrl == null) {
+            android.util.Log.e("FlutterPdfFragment", "pdfViewCtrl is null");
             return;
         }
 
@@ -78,12 +140,18 @@ public class FlutterPdfViewCtrlTabFragment extends PdfViewCtrlTabFragment2 {
             Page page = pdfViewCtrl.getDoc().getPage(pageNumber);
             Rect pageRect = page.getCropBox();
 
-            JSONObject jsonObject = new JSONObject();
-            jsonObject.put("width", pageRect.getWidth());
-            jsonObject.put("height", pageRect.getHeight());
+            double width = pageRect.getWidth();
+            double height = pageRect.getHeight();
 
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("width", width);
+            jsonObject.put("height", height);
+
+            android.util.Log.d("FlutterPdfFragment", "Sending document size: " + width + " x " + height);
             eventSink.success(jsonObject.toString());
+            android.util.Log.d("FlutterPdfFragment", "Document size sent successfully");
         } catch (Exception e) {
+            android.util.Log.e("FlutterPdfFragment", "Error sending document size", e);
             e.printStackTrace();
         } finally {
             try {

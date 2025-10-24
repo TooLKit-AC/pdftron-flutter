@@ -110,8 +110,8 @@ typedef void PageChangedListener(
 
 /// A listener used as the argument for [startZoomChangedListener].
 ///
-/// Gets the [zoom] ratio in the current document viewer.
-typedef void ZoomChangedListener(dynamic zoom);
+/// Gets the [zoom] ratio, [width] and [height] of the current document.
+typedef void ZoomChangedListener(dynamic zoom, dynamic width, dynamic height);
 
 /// A listener used as the argument for [startPageMovedListener].
 ///
@@ -489,8 +489,8 @@ CancelListener startPageChangedListener(PageChangedListener listener) {
 /// Listens for when the current document's zoom ratio is changed.
 ///
 /// ```dart
-/// var zoomChangedCancel = startZoomChangedListener((zoom) {
-///   print('flutter zoom changed. Current zoom is: $zoom');
+/// var zoomChangedCancel = startZoomChangedListener((zoom, width, height) {
+///   print('flutter zoom changed. Current zoom is: $zoom, size: ${width}x${height}');
 /// });
 /// ```
 ///
@@ -498,7 +498,20 @@ CancelListener startPageChangedListener(PageChangedListener listener) {
 CancelListener startZoomChangedListener(ZoomChangedListener listener) {
   var subscription = _zoomChangedChannel
       .receiveBroadcastStream(eventSinkId.zoomChangedId.index)
-      .listen(listener, cancelOnError: true);
+      .listen((data) {
+    // Support both old format (just zoom as number) and new format (JSON with zoom, width, height)
+    if (data is num) {
+      // Old format - backward compatibility
+      listener(data, null, null);
+    } else {
+      // New format - JSON string
+      dynamic zoomObject = jsonDecode(data);
+      dynamic zoom = zoomObject['zoom'];
+      dynamic width = zoomObject['width'];
+      dynamic height = zoomObject['height'];
+      listener(zoom, width, height);
+    }
+  }, cancelOnError: true);
 
   return () {
     subscription.cancel();
