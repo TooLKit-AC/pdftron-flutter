@@ -1487,23 +1487,10 @@
             @try {
                 [pdfViewCtrl DocLock:YES];
 
-                int currentPage = [pdfViewCtrl GetCurrentPage];
-                PTPDFDoc *doc = [pdfViewCtrl GetDoc];
-
-                double width = 0;
-                double height = 0;
-
-                if (doc != nil && currentPage > 0) {
-                    PTPage *page = [doc GetPage:currentPage];
-                    PTPDFRect *cropBox = [page GetCropBox];
-                    double pageWidth = [cropBox GetX2] - [cropBox GetX1];
-                    double pageHeight = [cropBox GetY2] - [cropBox GetY1];
-
-                    // Apply zoom to get rendered dimensions
-                    double zoomValue = [zoom doubleValue];
-                    width = pageWidth * zoomValue;
-                    height = pageHeight * zoomValue;
-                }
+                // Get the scrollable content dimensions (canvas size)
+                CGSize contentSize = pdfViewCtrl.contentSize;
+                double width = contentSize.width;
+                double height = contentSize.height;
 
                 NSDictionary *resultDict = @{
                     @"zoom": zoom,
