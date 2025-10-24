@@ -1527,10 +1527,10 @@
 
         if (doc != nil && currentPage > 0) {
             PTPage *page = [doc GetPage:currentPage];
-            PTRect *cropBox = [page GetCropBox];
+            PTPDFRect *cropBox = [page GetCropBox];
 
-            double width = [cropBox Width];
-            double height = [cropBox Height];
+            double width = [cropBox GetX2] - [cropBox GetX1];
+            double height = [cropBox GetY2] - [cropBox GetY1];
 
             NSDictionary *resultDict = @{
                 PTWidthKey: [NSNumber numberWithDouble:width],
