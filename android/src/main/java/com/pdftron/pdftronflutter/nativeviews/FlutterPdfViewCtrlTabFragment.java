@@ -71,17 +71,23 @@ public class FlutterPdfViewCtrlTabFragment extends PdfViewCtrlTabFragment2 {
 
         try {
             pdfViewCtrl.docLock(true);
+
+            // Get current page dimensions
             int currentPage = pdfViewCtrl.getCurrentPage();
             Page page = pdfViewCtrl.getDoc().getPage(currentPage);
             Rect pageRect = page.getCropBox();
 
-            double width = pageRect.getWidth();
-            double height = pageRect.getHeight();
+            double pageWidth = pageRect.getWidth();
+            double pageHeight = pageRect.getHeight();
+
+            // Apply zoom to get rendered dimensions
+            double renderedWidth = pageWidth * zoom;
+            double renderedHeight = pageHeight * zoom;
 
             JSONObject jsonObject = new JSONObject();
             jsonObject.put("zoom", zoom);
-            jsonObject.put("width", width);
-            jsonObject.put("height", height);
+            jsonObject.put("width", renderedWidth);
+            jsonObject.put("height", renderedHeight);
 
             eventSink.success(jsonObject.toString());
         } catch (Exception e) {

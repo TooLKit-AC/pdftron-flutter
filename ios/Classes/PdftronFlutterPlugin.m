@@ -1496,10 +1496,14 @@
                 if (doc != nil && currentPage > 0) {
                     PTPage *page = [doc GetPage:currentPage];
                     PTPDFRect *cropBox = [page GetCropBox];
-                    width = [cropBox GetX2] - [cropBox GetX1];
-                    height = [cropBox GetY2] - [cropBox GetY1];
+                    double pageWidth = [cropBox GetX2] - [cropBox GetX1];
+                    double pageHeight = [cropBox GetY2] - [cropBox GetY1];
+
+                    // Apply zoom to get rendered dimensions
+                    double zoomValue = [zoom doubleValue];
+                    width = pageWidth * zoomValue;
+                    height = pageHeight * zoomValue;
                 }
-                
 
                 NSDictionary *resultDict = @{
                     @"zoom": zoom,
