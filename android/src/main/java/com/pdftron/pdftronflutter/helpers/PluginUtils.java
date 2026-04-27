@@ -298,6 +298,7 @@ public class PluginUtils {
     public static final String FUNCTION_CAN_UNDO = "canUndo";
     public static final String FUNCTION_CAN_REDO = "canRedo";
     public static final String FUNCTION_GET_PAGE_CROP_BOX = "getPageCropBox";
+    public static final String FUNCTION_GET_PAGE_SCREEN_RECT = "getPageScreenRect";
     public static final String FUNCTION_SET_CURRENT_PAGE = "setCurrentPage";
     public static final String FUNCTION_GET_DOCUMENT_PATH = "getDocumentPath";
     public static final String FUNCTION_SET_TOOL_MODE = "setToolMode";
@@ -2351,6 +2352,22 @@ public class PluginUtils {
                 }
                 break;
             }
+            case FUNCTION_GET_PAGE_SCREEN_RECT: {
+                checkFunctionPrecondition(component);
+                Integer pageNumber = call.argument(KEY_PAGE_NUMBER);
+                if (pageNumber != null) {
+                    try {
+                        getPageScreenRect(pageNumber, result, component);
+                    } catch (JSONException ex) {
+                        ex.printStackTrace();
+                        result.error(Integer.toString(ex.hashCode()), "JSONException Error: " + ex, null);
+                    } catch (PDFNetException ex) {
+                        ex.printStackTrace();
+                        result.error(Long.toString(ex.getErrorCode()), "PDFTronException Error: " + ex, null);
+                    }
+                }
+                break;
+            }
             case FUNCTION_UNDO: {
                 checkFunctionPrecondition(component);
                 undo(result, component);
@@ -3659,6 +3676,59 @@ public class PluginUtils {
         jsonObject.put(KEY_WIDTH, rect.getWidth());
         jsonObject.put(KEY_HEIGHT, rect.getHeight());
         result.success(jsonObject.toString());
+    }
+
+    private static void getPageScreenRect(int pageNumber, MethodChannel.Result result, ViewerComponent component) throws PDFNetException, JSONException {
+        PDFViewCtrl pdfViewCtrl = component.getPdfViewCtrl();
+        if (pdfViewCtrl == null) {
+            result.error("InvalidState", "PDFViewCtrl not found", null);
+            return;
+        }
+
+        boolean shouldUnlockRead = false;
+        try {
+            pdfViewCtrl.docLockRead();
+            shouldUnlockRead = true;
+
+            PDFDoc pdfDoc = pdfViewCtrl.getDoc();
+            if (pdfDoc == null) {
+                result.success(null);
+                return;
+            }
+
+            Rect cropBox = pdfDoc.getPage(pageNumber).getCropBox();
+            double[] xs = { cropBox.getX1(), cropBox.getX2(), cropBox.getX2(), cropBox.getX1() };
+            double[] ys = { cropBox.getY1(), cropBox.getY1(), cropBox.getY2(), cropBox.getY2() };
+
+            double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
+            double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+            for (int i = 0; i < 4; i++) {
+                double[] screen = pdfViewCtrl.convPagePtToScreenPt(xs[i], ys[i], pageNumber);
+                if (screen[0] < minX) minX = screen[0];
+                if (screen[1] < minY) minY = screen[1];
+                if (screen[0] > maxX) maxX = screen[0];
+                if (screen[1] > maxY) maxY = screen[1];
+            }
+
+            // Match the unit space of getScrollPos / getZoom (raw View coords) so
+            // the rect aligns with the existing scroll/zoom-based math on the
+            // Flutter side.
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put(KEY_X1, minX);
+            jsonObject.put(KEY_Y1, minY);
+            jsonObject.put(KEY_X2, maxX);
+            jsonObject.put(KEY_Y2, maxY);
+            jsonObject.put(KEY_WIDTH, maxX - minX);
+            jsonObject.put(KEY_HEIGHT, maxY - minY);
+            result.success(jsonObject.toString());
+        } finally {
+            if (shouldUnlockRead) {
+                try {
+                    pdfViewCtrl.docUnlockRead();
+                } catch (Exception ignored) {
+                }
+            }
+        }
     }
 
     private static void undo(MethodChannel.Result result, ViewerComponent component) {

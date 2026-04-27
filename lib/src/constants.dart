@@ -31,6 +31,7 @@ class Functions {
   static const canUndo = "canUndo";
   static const canRedo = "canRedo";
   static const getPageCropBox = "getPageCropBox";
+  static const getPageScreenRect = "getPageScreenRect";
   static const getPageRotation = "getPageRotation";
   static const rotateClockwise = "rotateClockwise";
   static const rotateCounterClockwise = "rotateCounterClockwise";

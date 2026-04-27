@@ -322,6 +322,22 @@ class DocumentViewController {
     return Rect.fromJson(jsonDecode(cropBoxString));
   }
 
+  /// Gets the bounding [Rect] of the specified page in viewer screen
+  /// coordinates (logical pixels). Reflects the current zoom, scroll, and
+  /// page rotation, and accounts for canvas padding/centering applied by
+  /// the native viewer. Returns `null` if the page is not currently laid
+  /// out (e.g. before the document has finished loading).
+  ///
+  /// [pageNumber] is 1-indexed.
+  Future<Rect?> getPageScreenRect(int pageNumber) async {
+    final result = await _channel.invokeMethod<String?>(
+      Functions.getPageScreenRect,
+      <String, dynamic>{Parameters.pageNumber: pageNumber},
+    );
+    if (result == null) return null;
+    return Rect.fromJson(jsonDecode(result));
+  }
+
   /// Gets the rotation value of the specified page in the current document.
   ///
   /// [pageNumber] is 1-indexed.

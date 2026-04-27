@@ -228,6 +228,7 @@ static NSString * const PTRedoKey = @"redo";
 static NSString * const PTCanUndoKey = @"canUndo";
 static NSString * const PTCanRedoKey = @"canRedo";
 static NSString * const PTGetPageCropBoxKey = @"getPageCropBox";
+static NSString * const PTGetPageScreenRectKey = @"getPageScreenRect";
 static NSString * const PTGetPageRotationKey = @"getPageRotation";
 static NSString * const PTRotateClockwiseKey = @"rotateClockwise";
 static NSString * const PTRotateCounterClockwiseKey = @"rotateCounterClockwise";

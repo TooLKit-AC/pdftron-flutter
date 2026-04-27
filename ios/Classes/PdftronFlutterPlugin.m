@@ -1586,6 +1586,9 @@
     } else if ([call.method isEqualToString:PTGetPageCropBoxKey]) {
         NSNumber *pageNumber = [PdftronFlutterPlugin PT_idAsNSNumber:call.arguments[PTPageNumberArgumentKey]];
         [self getPageCropBox:pageNumber resultToken:result];
+    } else if ([call.method isEqualToString:PTGetPageScreenRectKey]) {
+        NSNumber *pageNumber = [PdftronFlutterPlugin PT_idAsNSNumber:call.arguments[PTPageNumberArgumentKey]];
+        [self getPageScreenRect:pageNumber resultToken:result];
     } else if ([call.method isEqualToString:PTGetPageRotationKey]) {
         NSNumber *pageNumber = [PdftronFlutterPlugin PT_idAsNSNumber:call.arguments[PTPageNumberArgumentKey]];
         [self getPageRotation:pageNumber resultToken:result];
@@ -2862,6 +2865,71 @@
         NSLog(@"Error: There was an error while trying to get page crop box. %@", error.localizedDescription);
         flutterResult([FlutterError errorWithCode:@"save_document" message:@"Failed to get page crop box" details:@"Error: There was an error while trying to get page crop box"]);
     }
+}
+
+- (void)getPageScreenRect:(NSNumber *)pageNumber resultToken:(FlutterResult)flutterResult
+{
+    PTDocumentController *documentController = [self getDocumentController];
+
+    if (documentController.document == Nil) {
+        flutterResult([FlutterError errorWithCode:@"get_page_screen_rect"
+                                          message:@"Failed to get page screen rect"
+                                          details:@"Error: The document view controller has no document."]);
+        return;
+    }
+
+    int pageNum = [pageNumber intValue];
+    PTPDFViewCtrl *pdfViewCtrl = documentController.pdfViewCtrl;
+
+    NSError *error;
+    __block NSDictionary<NSString *, NSNumber *> *resultMap = nil;
+
+    [pdfViewCtrl DocLockReadWithBlock:^(PTPDFDoc * _Nullable doc) {
+        PTPage *page = [doc GetPage:pageNum];
+        if (![page IsValid]) {
+            return;
+        }
+        PTPDFRect *cropBox = [page GetCropBox];
+        double xs[4] = { [cropBox GetX1], [cropBox GetX2], [cropBox GetX2], [cropBox GetX1] };
+        double ys[4] = { [cropBox GetY1], [cropBox GetY1], [cropBox GetY2], [cropBox GetY2] };
+
+        double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
+        for (int i = 0; i < 4; i++) {
+            PTPDFPoint *pagePt = [[PTPDFPoint alloc] initWithPx:xs[i] py:ys[i]];
+            PTPDFPoint *screenPt = [pdfViewCtrl ConvPagePtToScreenPt:pagePt page_num:pageNum];
+            double sx = [screenPt getX];
+            double sy = [screenPt getY];
+            if (sx < minX) minX = sx;
+            if (sy < minY) minY = sy;
+            if (sx > maxX) maxX = sx;
+            if (sy > maxY) maxY = sy;
+        }
+
+        resultMap = @{
+            PTX1Key: @(minX),
+            PTY1Key: @(minY),
+            PTX2Key: @(maxX),
+            PTY2Key: @(maxY),
+            PTWidthKey: @(maxX - minX),
+            PTHeightKey: @(maxY - minY),
+        };
+    } error:&error];
+
+    if (error) {
+        flutterResult([FlutterError errorWithCode:@"get_page_screen_rect"
+                                          message:@"Failed to get page screen rect"
+                                          details:error.localizedDescription]);
+        return;
+    }
+
+    if (!resultMap) {
+        flutterResult(nil);
+        return;
+    }
+
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:resultMap options:0 error:nil];
+    NSString *json = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+    flutterResult(json);
 }
 
 - (void)getPageRotation:(NSNumber *)pageNumber resultToken:(FlutterResult)flutterResult {
