@@ -2894,12 +2894,20 @@
         double xs[4] = { [cropBox GetX1], [cropBox GetX2], [cropBox GetX2], [cropBox GetX1] };
         double ys[4] = { [cropBox GetY1], [cropBox GetY1], [cropBox GetY2], [cropBox GetY2] };
 
+        // ConvPagePtToScreenPt returns coords at the committed zoom only —
+        // during a pinch gesture, PTPDFViewCtrl applies a transient visual
+        // scale via UIScrollView.zoomScale that is not reflected in the
+        // committed model. We multiply by zoomScale to mirror that visual
+        // transform; UIScrollView's bounds.origin already follows the focal
+        // point so a uniform scale around (0, 0) produces the correct visual.
+        const double zoomScale = pdfViewCtrl.zoomScale;
+
         double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
         for (int i = 0; i < 4; i++) {
             PTPDFPoint *pagePt = [[PTPDFPoint alloc] initWithPx:xs[i] py:ys[i]];
             PTPDFPoint *screenPt = [pdfViewCtrl ConvPagePtToScreenPt:pagePt page_num:pageNum];
-            double sx = [screenPt getX];
-            double sy = [screenPt getY];
+            double sx = [screenPt getX] * zoomScale;
+            double sy = [screenPt getY] * zoomScale;
             if (sx < minX) minX = sx;
             if (sy < minY) minY = sy;
             if (sx > maxX) maxX = sx;
