@@ -2871,10 +2871,11 @@
 {
     PTDocumentController *documentController = [self getDocumentController];
 
+    // Returning nil (rather than raising an error) lets the Flutter caller
+    // poll safely while the document is still loading or after it has been
+    // closed.
     if (documentController.document == Nil) {
-        flutterResult([FlutterError errorWithCode:@"get_page_screen_rect"
-                                          message:@"Failed to get page screen rect"
-                                          details:@"Error: The document view controller has no document."]);
+        flutterResult(nil);
         return;
     }
 

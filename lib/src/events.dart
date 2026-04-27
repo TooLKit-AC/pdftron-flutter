@@ -179,7 +179,11 @@ CancelListener startExportAnnotationCommandListener(
       .listen(listener, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -198,7 +202,11 @@ CancelListener startExportBookmarkListener(ExportBookmarkListener listener) {
       .listen(listener, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -218,7 +226,11 @@ CancelListener startDocumentLoadedListener(DocumentLoadedListener listener) {
       .listen(listener, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -240,7 +252,11 @@ CancelListener startDocumentErrorListener(DocumentErrorListener listener) {
   }, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -275,7 +291,11 @@ CancelListener startAnnotationChangedListener(
   }, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -307,7 +327,11 @@ CancelListener startAnnotationsSelectedListener(
   }, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -337,7 +361,11 @@ CancelListener startFormFieldValueChangedListener(
   }, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -364,7 +392,11 @@ CancelListener startBehaviorActivatedListener(
   }, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -393,7 +425,11 @@ CancelListener startLongPressMenuPressedListener(
     listener(longPressMenuItem, longPressText);
   }, cancelOnError: true);
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -428,7 +464,11 @@ CancelListener startAnnotationMenuPressedListener(
   }, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -450,7 +490,11 @@ CancelListener startLeadingNavButtonPressedListener(
   }, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -475,7 +519,11 @@ CancelListener startPageChangedListener(PageChangedListener listener) {
   }, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -494,7 +542,11 @@ CancelListener startZoomChangedListener(ZoomChangedListener listener) {
       .listen(listener, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -519,7 +571,11 @@ CancelListener startPageMovedListener(PageMovedListener listener) {
   }, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -541,7 +597,11 @@ CancelListener startAnnotationToolbarItemPressedListener(
       .listen(listener, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -565,7 +625,11 @@ CancelListener startScrollChangedListener(ScrollChangedListener listener) {
   }, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 
@@ -588,7 +652,11 @@ CancelListener startAppBarButtonPressedListener(AppBarButtonPressedListener list
       .listen(listener, cancelOnError: true);
 
   return () {
-    subscription.cancel();
+    // The native event channels throw a PlatformException with
+    // "No active stream to cancel" when a subscription is cancelled before
+    // the native sink finished setup (typical on widget dispose / hot
+    // reload). Swallow it — there is nothing to clean up.
+    subscription.cancel().catchError((Object _) {});
   };
 }
 

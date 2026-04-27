@@ -3680,8 +3680,11 @@ public class PluginUtils {
 
     private static void getPageScreenRect(int pageNumber, MethodChannel.Result result, ViewerComponent component) throws PDFNetException, JSONException {
         PDFViewCtrl pdfViewCtrl = component.getPdfViewCtrl();
+        // Returning null (rather than raising an error) lets the Flutter caller
+        // poll safely while the document is still loading or after it has been
+        // closed.
         if (pdfViewCtrl == null) {
-            result.error("InvalidState", "PDFViewCtrl not found", null);
+            result.success(null);
             return;
         }
 
