@@ -1485,14 +1485,66 @@
 -(void)documentController:(PTDocumentController *)docVC scrollChanged:(NSString *)scrollString
 {
     PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
-    
+
     double horizontal = [pdfViewCtrl GetHScrollPos];
     double vertical = [pdfViewCtrl GetVScrollPos];
 
-     NSDictionary *resultDict = @{
+    NSMutableDictionary *resultDict = [@{
          PTReflowOrientationHorizontalKey: [NSNumber numberWithDouble:horizontal],
          PTReflowOrientationVerticalKey: [NSNumber numberWithDouble:vertical],
-    };
+    } mutableCopy];
+
+    // Bundle the current page's screen rect into the event payload. During
+    // pinch the platform-channel round-trip from Dart back to native is too
+    // slow to keep marker overlays glued to the page (Flutter rebuilds get
+    // starved while the UIKit gesture is active), so we ship the rect inline
+    // with every scroll/pinch frame. Same focal-point math as
+    // -getPageScreenRect:resultToken: — kept inline to avoid touching the
+    // existing public API.
+    if (docVC.document != nil) {
+        const int pageNum = pdfViewCtrl.currentPage;
+        NSError *rectError;
+        __block NSDictionary<NSString *, NSNumber *> *rectMap = nil;
+        [pdfViewCtrl DocLockReadWithBlock:^(PTPDFDoc * _Nullable doc) {
+            PTPage *page = [doc GetPage:pageNum];
+            if (![page IsValid]) {
+                return;
+            }
+            PTPDFRect *cropBox = [page GetCropBox];
+            double xs[4] = { [cropBox GetX1], [cropBox GetX2], [cropBox GetX2], [cropBox GetX1] };
+            double ys[4] = { [cropBox GetY1], [cropBox GetY1], [cropBox GetY2], [cropBox GetY2] };
+
+            const CGFloat zs = pdfViewCtrl.zoomScale;
+            const CGPoint origin = pdfViewCtrl.bounds.origin;
+
+            double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
+            for (int i = 0; i < 4; i++) {
+                PTPDFPoint *pagePt = [[PTPDFPoint alloc] initWithPx:xs[i] py:ys[i]];
+                PTPDFPoint *committedScreen = [pdfViewCtrl ConvPagePtToScreenPt:pagePt
+                                                                       page_num:pageNum];
+                const double cx = [committedScreen getX];
+                const double cy = [committedScreen getY];
+                const double sx = (cx + origin.x) * zs - origin.x;
+                const double sy = (cy + origin.y) * zs - origin.y;
+                if (sx < minX) minX = sx;
+                if (sy < minY) minY = sy;
+                if (sx > maxX) maxX = sx;
+                if (sy > maxY) maxY = sy;
+            }
+            rectMap = @{
+                PTX1Key: @(minX),
+                PTY1Key: @(minY),
+                PTX2Key: @(maxX),
+                PTY2Key: @(maxY),
+                PTWidthKey: @(maxX - minX),
+                PTHeightKey: @(maxY - minY),
+                @"page": @(pageNum),
+            };
+        } error:&rectError];
+        if (rectMap != nil) {
+            resultDict[@"pageRect"] = rectMap;
+        }
+    }
 
     if (self.scrollChangedEventSink != nil)
     {

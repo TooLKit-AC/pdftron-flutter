@@ -125,9 +125,12 @@ typedef void AnnotationToolbarItemPressedListener(dynamic id);
 
 /// A listener used as the argument for [startScrollChangedListener].
 ///
-/// Gets the current [horizontal] scroll position and the [vertical] scroll
-/// position.
-typedef void ScrollChangedListener(dynamic horizontal, dynamic vertical);
+/// Gets the current [horizontal] scroll position, the [vertical] scroll
+/// position, and the bundled [pageRect] of the currently visible page in
+/// viewer-screen logical pixels (keys: x1, y1, x2, y2, width, height, page).
+/// `pageRect` is null when the document has not finished loading.
+typedef void ScrollChangedListener(
+    dynamic horizontal, dynamic vertical, Map<String, dynamic>? pageRect);
 
 // Hygen Generated Event Listeners (2)
 
@@ -621,7 +624,10 @@ CancelListener startScrollChangedListener(ScrollChangedListener listener) {
     dynamic scrollObject = jsonDecode(scrollString);
     dynamic horizontal = scrollObject['horizontal'];
     dynamic vertical = scrollObject['vertical'];
-    listener(horizontal, vertical);
+    final rawRect = scrollObject['pageRect'];
+    final pageRect =
+        rawRect is Map ? Map<String, dynamic>.from(rawRect) : null;
+    listener(horizontal, vertical, pageRect);
   }, cancelOnError: true);
 
   return () {
