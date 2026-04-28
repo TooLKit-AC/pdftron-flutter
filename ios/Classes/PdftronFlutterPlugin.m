@@ -2891,21 +2891,47 @@
             return;
         }
         PTPDFRect *cropBox = [page GetCropBox];
+        double xs[4] = { [cropBox GetX1], [cropBox GetX2], [cropBox GetX2], [cropBox GetX1] };
+        double ys[4] = { [cropBox GetY1], [cropBox GetY1], [cropBox GetY2], [cropBox GetY2] };
 
-        // PDFRectPage2CGRectScreen handles rotation, page positioning within
-        // the canvas, and any padding/centering applied by the viewer. Apryse
-        // uses the same internal path for hit-testing annotations, so the
-        // result tracks the live UIScrollView state (including zoomScale)
-        // during a pinch gesture — which ConvPagePtToScreenPt does not.
-        const CGRect cg = [pdfViewCtrl PDFRectPage2CGRectScreen:cropBox PageNumber:pageNum];
+        // ConvPagePtToScreenPt returns coords using Apryse's committed zoom
+        // and the *live* UIScrollView contentOffset (= bounds.origin). During
+        // a pinch, UIScrollView keeps the focal point stable by adjusting
+        // bounds.origin and applying a transient zoomScale. The visual
+        // position of any committed-canvas point K is:
+        //
+        //     visual = K * zoomScale - bounds.origin
+        //
+        // and committedScreen returned by Apryse is K - bounds.origin, so:
+        //
+        //     visual = (committedScreen + bounds.origin) * zoomScale - bounds.origin
+        //
+        // which simplifies to the focal-point-aware formula below.
+        const CGFloat zs = pdfViewCtrl.zoomScale;
+        const CGPoint origin = pdfViewCtrl.bounds.origin;
+
+        double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
+        for (int i = 0; i < 4; i++) {
+            PTPDFPoint *pagePt = [[PTPDFPoint alloc] initWithPx:xs[i] py:ys[i]];
+            PTPDFPoint *committedScreen = [pdfViewCtrl ConvPagePtToScreenPt:pagePt
+                                                                   page_num:pageNum];
+            const double cx = [committedScreen getX];
+            const double cy = [committedScreen getY];
+            const double sx = (cx + origin.x) * zs - origin.x;
+            const double sy = (cy + origin.y) * zs - origin.y;
+            if (sx < minX) minX = sx;
+            if (sy < minY) minY = sy;
+            if (sx > maxX) maxX = sx;
+            if (sy > maxY) maxY = sy;
+        }
 
         resultMap = @{
-            PTX1Key: @(CGRectGetMinX(cg)),
-            PTY1Key: @(CGRectGetMinY(cg)),
-            PTX2Key: @(CGRectGetMaxX(cg)),
-            PTY2Key: @(CGRectGetMaxY(cg)),
-            PTWidthKey: @(CGRectGetWidth(cg)),
-            PTHeightKey: @(CGRectGetHeight(cg)),
+            PTX1Key: @(minX),
+            PTY1Key: @(minY),
+            PTX2Key: @(maxX),
+            PTY2Key: @(maxY),
+            PTWidthKey: @(maxX - minX),
+            PTHeightKey: @(maxY - minY),
         };
     } error:&error];
 
