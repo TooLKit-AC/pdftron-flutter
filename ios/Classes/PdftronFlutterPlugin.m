@@ -2902,15 +2902,12 @@
 // viewer's screen coordinate space. Returns nil when the document is not
 // loaded or the page is invalid.
 //
-// ConvPagePtToScreenPt returns the on-screen position at Apryse's committed
-// zoom, already accounting for the live bounds.origin (UIScrollView
-// focal-point shift). During an active pinch gesture UIScrollView additionally
-// applies a transient `zoomScale` as a layer transform around the content
-// layer's origin, so the actual visual position is:
-//
-//     visual = committedScreen * zoomScale
-//
-// At rest zoomScale == 1.0 and the multiplication is a no-op.
+// ConvPagePtToScreenPt returns the live visual position of a page point —
+// it accounts for committed zoom, scroll, page rotation/positioning, and
+// the transient `zoomScale` applied by UIScrollView during a pinch gesture.
+// Apryse uses the same call internally for annotation hit-testing, which is
+// what we rely on to keep the marker overlay glued to the page during pinch
+// and pan-while-pinching.
 static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
     PTPDFViewCtrl *pdfViewCtrl, int pageNum)
 {
@@ -2930,15 +2927,13 @@ static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
         double xs[4] = { [cropBox GetX1], [cropBox GetX2], [cropBox GetX2], [cropBox GetX1] };
         double ys[4] = { [cropBox GetY1], [cropBox GetY1], [cropBox GetY2], [cropBox GetY2] };
 
-        const CGFloat zs = pdfViewCtrl.zoomScale;
-
         double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
         for (int i = 0; i < 4; i++) {
             PTPDFPoint *pagePt = [[PTPDFPoint alloc] initWithPx:xs[i] py:ys[i]];
-            PTPDFPoint *committedScreen = [pdfViewCtrl ConvPagePtToScreenPt:pagePt
-                                                                   page_num:pageNum];
-            const double sx = [committedScreen getX] * zs;
-            const double sy = [committedScreen getY] * zs;
+            PTPDFPoint *screenPt = [pdfViewCtrl ConvPagePtToScreenPt:pagePt
+                                                            page_num:pageNum];
+            const double sx = [screenPt getX];
+            const double sy = [screenPt getY];
             if (sx < minX) minX = sx;
             if (sy < minY) minY = sy;
             if (sx > maxX) maxX = sx;
