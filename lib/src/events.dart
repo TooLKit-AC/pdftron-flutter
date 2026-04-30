@@ -534,6 +534,28 @@ CancelListener startPageChangedListener(PageChangedListener listener) {
   };
 }
 
+// Cached broadcast streams for high-frequency events. Each call to
+// `EventChannel.receiveBroadcastStream(...)` creates a new StreamController
+// that calls `setMessageHandler` on subscribe and clears it on cancel —
+// when multiple `XPdfViewer`s are mounted concurrently (e.g. an editor under
+// a pushed editor route), the second viewer's cancel would clear the
+// Dart-side message handler and starve the first viewer of events. Caching
+// the broadcast stream multiplexes multiple `.listen()` calls onto a single
+// onListen/onCancel cycle: the handler stays registered as long as ANY
+// listener is alive.
+Stream<dynamic>? _zoomChangedBroadcast;
+Stream<dynamic>? _scrollChangedBroadcast;
+
+Stream<dynamic> _getZoomChangedBroadcast() {
+  return _zoomChangedBroadcast ??= _zoomChangedChannel
+      .receiveBroadcastStream(eventSinkId.zoomChangedId.index);
+}
+
+Stream<dynamic> _getScrollChangedBroadcast() {
+  return _scrollChangedBroadcast ??= _scrollChangedChannel
+      .receiveBroadcastStream(eventSinkId.scrollChangedId.index);
+}
+
 /// Listens for when the current document's zoom ratio is changed.
 ///
 /// ```dart
@@ -544,9 +566,7 @@ CancelListener startPageChangedListener(PageChangedListener listener) {
 ///
 /// Returns a function that can cancel the listener.
 CancelListener startZoomChangedListener(ZoomChangedListener listener) {
-  var subscription = _zoomChangedChannel
-      .receiveBroadcastStream(eventSinkId.zoomChangedId.index)
-      .listen((payload) {
+  var subscription = _getZoomChangedBroadcast().listen((payload) {
     // iOS now ships a JSON string `{ "zoom": ..., "pageRect": {...} }`.
     // Older platforms (and pre-update Android) still send a raw NSNumber /
     // double — handle both shapes for forward compatibility.
@@ -638,9 +658,7 @@ CancelListener startAnnotationToolbarItemPressedListener(
 ///
 /// Returns a function that can cancel the listener.
 CancelListener startScrollChangedListener(ScrollChangedListener listener) {
-  var subscription = _scrollChangedChannel
-      .receiveBroadcastStream(eventSinkId.scrollChangedId.index)
-      .listen((scrollString) {
+  var subscription = _getScrollChangedBroadcast().listen((scrollString) {
     dynamic scrollObject = jsonDecode(scrollString);
     dynamic horizontal = scrollObject['horizontal'];
     dynamic vertical = scrollObject['vertical'];

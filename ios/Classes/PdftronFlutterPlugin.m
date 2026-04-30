@@ -18,9 +18,7 @@
 @property (nonatomic, strong) FlutterEventSink annotationMenuPressedEventSink;
 @property (nonatomic, strong) FlutterEventSink leadingNavButtonPressedEventSink;
 @property (nonatomic, strong) FlutterEventSink pageChangedEventSink;
-@property (nonatomic, strong) FlutterEventSink zoomChangedEventSink;
 @property (nonatomic, strong) FlutterEventSink pageMovedEventSink;
-@property (nonatomic, strong) FlutterEventSink scrollChangedEventSink;
 @property (nonatomic, strong) FlutterEventSink annotationToolbarItemPressedEventSink;
 // Hygen Generated Event Listeners (1)
 @property (nonatomic, strong) FlutterEventSink appBarButtonPressedEventSink;
@@ -29,6 +27,19 @@
 @property (nonatomic, assign, getter=isMultiTabSet) BOOL multiTabSet;
 
 @end
+
+// Static event sinks for high-frequency events (zoom, scroll). Each
+// `DocumentView` platform view creates its own `PdftronFlutterPlugin`
+// instance and registers itself as `setStreamHandler:` on event channels
+// keyed by FIXED names. The newest plugin wins, so a second viewer (e.g.
+// an editor pushed on top of another editor) overrides the first viewer's
+// handler — and on dismiss the channel is unregistered, starving the still-
+// alive first viewer of events. By feeding all instances through a static
+// sink we decouple "who fires events" from "who registered the handler":
+// the sink stays valid as long as Dart has any subscriber (which the Dart-
+// side broadcast multiplex in events.dart guarantees).
+static FlutterEventSink PT_SharedZoomChangedEventSink = nil;
+static FlutterEventSink PT_SharedScrollChangedEventSink = nil;
 
 @implementation PdftronFlutterPlugin
 
@@ -1266,13 +1277,13 @@
             self.pageChangedEventSink = events;
             break;
         case zoomChangedId:
-            self.zoomChangedEventSink = events;
+            PT_SharedZoomChangedEventSink = events;
             break;
         case pageMovedId:
             self.pageMovedEventSink = events;
             break;
         case scrollChangedId:
-            self.scrollChangedEventSink = events;
+            PT_SharedScrollChangedEventSink = events;
             break;
         // Hygen Generated Event Listeners (3)
         case annotationToolbarItemPressedId:
@@ -1329,13 +1340,13 @@
             self.pageChangedEventSink = nil;
             break;
         case zoomChangedId:
-            self.zoomChangedEventSink = nil;
+            PT_SharedZoomChangedEventSink = nil;
             break;
         case pageMovedId:
             self.pageMovedEventSink = nil;
             break;
         case scrollChangedId:
-            self.scrollChangedEventSink = nil;
+            PT_SharedScrollChangedEventSink = nil;
             break;
         // Hygen Generated Event Listeners (4)
         case annotationToolbarItemPressedId:
@@ -1490,13 +1501,13 @@ static void PT_AttachPageRect(NSMutableDictionary *dict, PTDocumentController *d
 
 -(void)documentController:(PTDocumentController *)docVC zoomChanged:(NSNumber*)zoom
 {
-    if (self.zoomChangedEventSink == nil) {
+    if (PT_SharedZoomChangedEventSink == nil) {
         return;
     }
 
     NSMutableDictionary *resultDict = [@{@"zoom": zoom} mutableCopy];
     PT_AttachPageRect(resultDict, docVC);
-    self.zoomChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
+    PT_SharedZoomChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
 }
 
 -(void)documentController:(PTDocumentController *)docVC pageMoved:(NSString *)pageNumbersString
@@ -1509,7 +1520,7 @@ static void PT_AttachPageRect(NSMutableDictionary *dict, PTDocumentController *d
 
 -(void)documentController:(PTDocumentController *)docVC scrollChanged:(NSString *)scrollString
 {
-    if (self.scrollChangedEventSink == nil) {
+    if (PT_SharedScrollChangedEventSink == nil) {
         return;
     }
 
@@ -1519,7 +1530,7 @@ static void PT_AttachPageRect(NSMutableDictionary *dict, PTDocumentController *d
         PTReflowOrientationVerticalKey: @([pdfViewCtrl GetVScrollPos]),
     } mutableCopy];
     PT_AttachPageRect(resultDict, docVC);
-    self.scrollChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
+    PT_SharedScrollChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
 }
 
 // Hygen Generated Event Listeners (5)
@@ -2987,19 +2998,24 @@ static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
     const double hScroll = [pdfViewCtrl GetHScrollPos];
     const double vScroll = [pdfViewCtrl GetVScrollPos];
 
-    // Branch on the committed-zoom dimensions, not the transient ones.
-    // Apryse's canvas layout (centering padding vs pannable area) is fixed
-    // at the last committed zoom — during pinch the inner UIScrollView only
-    // scales the visual via zoomScale and rubber-bands hScroll/vScroll. If
-    // we branched on transient (pageW/pageH), a pinch crossing the
-    // viewport-fit threshold would jump branches mid-gesture, producing a
-    // visible glitch (~10 px) until commit.
-    const double x1 = (committedW <= viewportSize.width)
-        ? (viewportSize.width - pageW) / 2.0
-        : -hScroll;
-    const double y1 = (committedH <= viewportSize.height)
-        ? (viewportSize.height - pageH) / 2.0
-        : -vScroll;
+    // Use scroll-based positioning whenever the page is pannable, either
+    // because the *committed* layout exceeds the viewport (Apryse made it
+    // pannable at the last commit) or because the *transient* pinch made
+    // it bigger than the viewport (UIScrollView allows pan during the
+    // gesture, hScroll/vScroll track it live). Branching on `max` of the
+    // two means:
+    //   - pinch+pan from a centered state stays glued to the pan (the
+    //     transient page exceeds even though committed didn't),
+    //   - pinch-out from a panned state stays scroll-based at the boundary
+    //     where the transient page briefly fits — no mid-gesture branch
+    //     flip, no ~10 px glitch.
+    const BOOL useScrollH = committedW > viewportSize.width
+                         || pageW    > viewportSize.width;
+    const BOOL useScrollV = committedH > viewportSize.height
+                         || pageH    > viewportSize.height;
+
+    const double x1 = useScrollH ? -hScroll : (viewportSize.width  - pageW) / 2.0;
+    const double y1 = useScrollV ? -vScroll : (viewportSize.height - pageH) / 2.0;
 
     return @{
         PTX1Key: @(x1),
