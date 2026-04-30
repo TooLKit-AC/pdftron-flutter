@@ -1466,37 +1466,36 @@
     }
 }
 
+// Bundles the current page's screen rect into a scroll/zoom event payload.
+// The platform-channel round-trip from Dart back to native is too slow to
+// keep a marker overlay glued to the page during a pinch (Flutter rebuilds
+// are starved while the UIKit gesture is active), so we ship the rect inline
+// with every event frame instead of having the Dart side re-fetch it.
+static void PT_AttachPageRect(NSMutableDictionary *dict, PTDocumentController *docVC)
+{
+    if (docVC.document == nil) {
+        return;
+    }
+    PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
+    if (pdfViewCtrl == nil) {
+        return;
+    }
+    const int pageNum = pdfViewCtrl.currentPage;
+    NSDictionary *rectMap = PT_PageScreenRectMap(pdfViewCtrl, pageNum);
+    if (rectMap != nil) {
+        dict[@"pageRect"] = rectMap;
+        dict[@"page"] = @(pageNum);
+    }
+}
+
 -(void)documentController:(PTDocumentController *)docVC zoomChanged:(NSNumber*)zoom
 {
-    // [DEBUG-PINCH] Confirm event fires during pinch.
-    static int zoomEventCount = 0;
-    if ((zoomEventCount++ % 5) == 0) {
-        NSLog(@"[ZOOM-EVT #%d] zoom=%.3f", zoomEventCount, [zoom doubleValue]);
-    }
-
     if (self.zoomChangedEventSink == nil) {
         return;
     }
 
-    // Bundle the current page's screen rect into the event payload. The
-    // platform-channel round-trip from Dart back to native is too slow to
-    // keep marker overlays glued to the page during a pinch (Flutter rebuilds
-    // are starved while the UIKit gesture is active), so we ship the rect
-    // inline with every zoom frame.
-    NSMutableDictionary *resultDict = [@{
-        @"zoom": zoom,
-    } mutableCopy];
-
-    PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
-    if (docVC.document != nil && pdfViewCtrl != nil) {
-        const int pageNum = pdfViewCtrl.currentPage;
-        NSDictionary *rectMap = PT_PageScreenRectMap(pdfViewCtrl, pageNum);
-        if (rectMap != nil) {
-            resultDict[@"pageRect"] = rectMap;
-            resultDict[@"page"] = @(pageNum);
-        }
-    }
-
+    NSMutableDictionary *resultDict = [@{@"zoom": zoom} mutableCopy];
+    PT_AttachPageRect(resultDict, docVC);
     self.zoomChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
 }
 
@@ -1510,36 +1509,16 @@
 
 -(void)documentController:(PTDocumentController *)docVC scrollChanged:(NSString *)scrollString
 {
-    // [DEBUG-PINCH] Confirm event fires during pinch.
-    static int scrollEventCount = 0;
-    if ((scrollEventCount++ % 5) == 0) {
-        NSLog(@"[SCROLL-EVT #%d]", scrollEventCount);
-    }
-
     if (self.scrollChangedEventSink == nil) {
         return;
     }
 
     PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
-    double horizontal = [pdfViewCtrl GetHScrollPos];
-    double vertical = [pdfViewCtrl GetVScrollPos];
-
     NSMutableDictionary *resultDict = [@{
-        PTReflowOrientationHorizontalKey: [NSNumber numberWithDouble:horizontal],
-        PTReflowOrientationVerticalKey: [NSNumber numberWithDouble:vertical],
+        PTReflowOrientationHorizontalKey: @([pdfViewCtrl GetHScrollPos]),
+        PTReflowOrientationVerticalKey: @([pdfViewCtrl GetVScrollPos]),
     } mutableCopy];
-
-    // Bundle the current page's screen rect inline (see zoomChanged for the
-    // rationale — we avoid the platform-channel round-trip during pinch/scroll).
-    if (docVC.document != nil && pdfViewCtrl != nil) {
-        const int pageNum = pdfViewCtrl.currentPage;
-        NSDictionary *rectMap = PT_PageScreenRectMap(pdfViewCtrl, pageNum);
-        if (rectMap != nil) {
-            resultDict[@"pageRect"] = rectMap;
-            resultDict[@"page"] = @(pageNum);
-        }
-    }
-
+    PT_AttachPageRect(resultDict, docVC);
     self.scrollChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
 }
 
@@ -2941,36 +2920,63 @@ static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
         return nil;
     }
 
-    __block double committedW = 0;
-    __block double committedH = 0;
-    NSError *error = nil;
+    // The committed-zoom projection of the page's cropBox is invariant during
+    // a gesture (Apryse only updates it at zoom commit), and computing it
+    // requires a doc read lock + 4× ConvPagePtToScreenPt — too heavy to
+    // re-run at 60 Hz during pinch. Cache keyed on (controller, page,
+    // committed zoom); a new pinch commit invalidates by changing zoom.
+    static __weak PTPDFViewCtrl *cachedCtrl = nil;
+    static int cachedPage = -1;
+    static double cachedZoom = -1;
+    static double cachedW = 0;
+    static double cachedH = 0;
 
-    [pdfViewCtrl DocLockReadWithBlock:^(PTPDFDoc * _Nullable doc) {
-        PTPage *page = [doc GetPage:pageNum];
-        if (![page IsValid]) {
-            return;
-        }
-        PTPDFRect *cropBox = [page GetCropBox];
-        double xs[4] = { [cropBox GetX1], [cropBox GetX2], [cropBox GetX2], [cropBox GetX1] };
-        double ys[4] = { [cropBox GetY1], [cropBox GetY1], [cropBox GetY2], [cropBox GetY2] };
+    const double committedZoom = pdfViewCtrl.zoom;
+    double committedW = 0;
+    double committedH = 0;
 
-        double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
-        for (int i = 0; i < 4; i++) {
-            PTPDFPoint *pagePt = [[PTPDFPoint alloc] initWithPx:xs[i] py:ys[i]];
-            PTPDFPoint *screenPt = [pdfViewCtrl ConvPagePtToScreenPt:pagePt
-                                                            page_num:pageNum];
-            const double sx = [screenPt getX];
-            const double sy = [screenPt getY];
-            if (sx < minX) minX = sx;
-            if (sy < minY) minY = sy;
-            if (sx > maxX) maxX = sx;
-            if (sy > maxY) maxY = sy;
+    if (cachedCtrl == pdfViewCtrl && cachedPage == pageNum && cachedZoom == committedZoom) {
+        committedW = cachedW;
+        committedH = cachedH;
+    } else {
+        __block double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
+        __block BOOL valid = NO;
+        NSError *error = nil;
+        [pdfViewCtrl DocLockReadWithBlock:^(PTPDFDoc * _Nullable doc) {
+            PTPage *page = [doc GetPage:pageNum];
+            if (![page IsValid]) {
+                return;
+            }
+            valid = YES;
+            PTPDFRect *cropBox = [page GetCropBox];
+            double xs[4] = { [cropBox GetX1], [cropBox GetX2], [cropBox GetX2], [cropBox GetX1] };
+            double ys[4] = { [cropBox GetY1], [cropBox GetY1], [cropBox GetY2], [cropBox GetY2] };
+            for (int i = 0; i < 4; i++) {
+                PTPDFPoint *pagePt = [[PTPDFPoint alloc] initWithPx:xs[i] py:ys[i]];
+                PTPDFPoint *screenPt = [pdfViewCtrl ConvPagePtToScreenPt:pagePt
+                                                                page_num:pageNum];
+                const double sx = [screenPt getX];
+                const double sy = [screenPt getY];
+                if (sx < minX) minX = sx;
+                if (sy < minY) minY = sy;
+                if (sx > maxX) maxX = sx;
+                if (sy > maxY) maxY = sy;
+            }
+        } error:&error];
+
+        if (error != nil || !valid) {
+            return nil;
         }
         committedW = maxX - minX;
         committedH = maxY - minY;
-    } error:&error];
+        cachedCtrl = pdfViewCtrl;
+        cachedPage = pageNum;
+        cachedZoom = committedZoom;
+        cachedW = committedW;
+        cachedH = committedH;
+    }
 
-    if (error != nil || committedW <= 0 || committedH <= 0) {
+    if (committedW <= 0 || committedH <= 0) {
         return nil;
     }
 
@@ -2981,14 +2987,21 @@ static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
     const double hScroll = [pdfViewCtrl GetHScrollPos];
     const double vScroll = [pdfViewCtrl GetVScrollPos];
 
-    const double x1 = (pageW <= viewportSize.width)
+    // Branch on the committed-zoom dimensions, not the transient ones.
+    // Apryse's canvas layout (centering padding vs pannable area) is fixed
+    // at the last committed zoom — during pinch the inner UIScrollView only
+    // scales the visual via zoomScale and rubber-bands hScroll/vScroll. If
+    // we branched on transient (pageW/pageH), a pinch crossing the
+    // viewport-fit threshold would jump branches mid-gesture, producing a
+    // visible glitch (~10 px) until commit.
+    const double x1 = (committedW <= viewportSize.width)
         ? (viewportSize.width - pageW) / 2.0
         : -hScroll;
-    const double y1 = (pageH <= viewportSize.height)
+    const double y1 = (committedH <= viewportSize.height)
         ? (viewportSize.height - pageH) / 2.0
         : -vScroll;
 
-    NSDictionary<NSString *, NSNumber *> *resultMap = @{
+    return @{
         PTX1Key: @(x1),
         PTY1Key: @(y1),
         PTX2Key: @(x1 + pageW),
@@ -2996,20 +3009,6 @@ static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
         PTWidthKey: @(pageW),
         PTHeightKey: @(pageH),
     };
-
-    // [DEBUG-PINCH] Rate-limited trace. Remove once validated on device.
-    static int callCount = 0;
-    if ((callCount++ % 5) == 0) {
-        NSLog(@"[PT_PageScreenRect] zoom=%.3f zoomScale=%.3f viewport=(%.1f x %.1f) "
-              @"hScroll=%.1f vScroll=%.1f committedW=%.1f committedH=%.1f → "
-              @"rect=(%.1f, %.1f) w=%.1f h=%.1f",
-              pdfViewCtrl.zoom, pdfViewCtrl.zoomScale,
-              viewportSize.width, viewportSize.height,
-              hScroll, vScroll, committedW, committedH,
-              x1, y1, pageW, pageH);
-    }
-
-    return resultMap;
 }
 
 - (void)getPageScreenRect:(NSNumber *)pageNumber resultToken:(FlutterResult)flutterResult
