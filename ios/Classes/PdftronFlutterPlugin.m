@@ -1468,6 +1468,12 @@
 
 -(void)documentController:(PTDocumentController *)docVC zoomChanged:(NSNumber*)zoom
 {
+    // [DEBUG-PINCH] Confirm event fires during pinch.
+    static int zoomEventCount = 0;
+    if ((zoomEventCount++ % 5) == 0) {
+        NSLog(@"[ZOOM-EVT #%d] zoom=%.3f", zoomEventCount, [zoom doubleValue]);
+    }
+
     if (self.zoomChangedEventSink == nil) {
         return;
     }
@@ -1504,6 +1510,12 @@
 
 -(void)documentController:(PTDocumentController *)docVC scrollChanged:(NSString *)scrollString
 {
+    // [DEBUG-PINCH] Confirm event fires during pinch.
+    static int scrollEventCount = 0;
+    if ((scrollEventCount++ % 5) == 0) {
+        NSLog(@"[SCROLL-EVT #%d]", scrollEventCount);
+    }
+
     if (self.scrollChangedEventSink == nil) {
         return;
     }
@@ -2916,6 +2928,7 @@ static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
     }
 
     __block NSDictionary<NSString *, NSNumber *> *resultMap = nil;
+    __block double dbgX1 = 0, dbgY1 = 0, dbgX2 = 0, dbgY2 = 0;
     NSError *error = nil;
 
     [pdfViewCtrl DocLockReadWithBlock:^(PTPDFDoc * _Nullable doc) {
@@ -2940,6 +2953,11 @@ static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
             if (sy > maxY) maxY = sy;
         }
 
+        dbgX1 = minX;
+        dbgY1 = minY;
+        dbgX2 = maxX;
+        dbgY2 = maxY;
+
         resultMap = @{
             PTX1Key: @(minX),
             PTY1Key: @(minY),
@@ -2953,6 +2971,23 @@ static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
     if (error != nil) {
         return nil;
     }
+
+    // [DEBUG-PINCH] Rate-limited trace. Remove once pinch tracking is fixed.
+    static int callCount = 0;
+    if ((callCount++ % 3) == 0) {
+        NSLog(@"[PT_PageScreenRect] zoom=%.3f zoomScale=%.3f "
+              @"bounds.origin=(%.1f, %.1f) bounds.size=(%.1f x %.1f) "
+              @"hScroll=%.1f vScroll=%.1f "
+              @"rect=(%.1f, %.1f) -> (%.1f, %.1f) (w=%.1f h=%.1f)",
+              pdfViewCtrl.zoom,
+              pdfViewCtrl.zoomScale,
+              pdfViewCtrl.bounds.origin.x, pdfViewCtrl.bounds.origin.y,
+              pdfViewCtrl.bounds.size.width, pdfViewCtrl.bounds.size.height,
+              [pdfViewCtrl GetHScrollPos], [pdfViewCtrl GetVScrollPos],
+              dbgX1, dbgY1, dbgX2, dbgY2,
+              dbgX2 - dbgX1, dbgY2 - dbgY1);
+    }
+
     return resultMap;
 }
 
