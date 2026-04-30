@@ -2911,15 +2911,29 @@
 }
 
 // Computes the on-screen rect of a page's cropBox, in logical pixels, in the
-// viewer's screen coordinate space. Returns nil when the document is not
-// loaded or the page is invalid.
+// viewer's screen coordinate space.
 //
-// ConvPagePtToScreenPt returns the live visual position of a page point —
-// it accounts for committed zoom, scroll, page rotation/positioning, and
-// the transient `zoomScale` applied by UIScrollView during a pinch gesture.
-// Apryse uses the same call internally for annotation hit-testing, which is
-// what we rely on to keep the marker overlay glued to the page during pinch
-// and pan-while-pinching.
+// Why this is non-trivial during a pinch: `ConvPagePtToScreenPt` returns a
+// position derived from the *committed* zoom and freezes during an active
+// pinch (Apryse only commits at gesture-end). It cannot be used to track
+// the live visual position. Empirically (see commit log), during pinch:
+//
+//   - `pdfViewCtrl.zoom`        = committed zoom (frozen)
+//   - `pdfViewCtrl.zoomScale`   = live transient pinch factor (1.0 → ~3.0)
+//   - `pdfViewCtrl.bounds.origin` is always (0, 0) — `pdfViewCtrl` wraps the
+//     inner UIScrollView, it isn't one itself.
+//   - `GetHScrollPos`/`GetVScrollPos` ARE live (track pan-during-pinch).
+//
+// So we compute the visual rect from primitives:
+//
+//   pageW = committedRect.width  * zoomScale
+//   pageH = committedRect.height * zoomScale
+//   x1    = pageW ≤ viewportW ? (viewportW - pageW) / 2 : -hScroll
+//   y1    = pageH ≤ viewportH ? (viewportH - pageH) / 2 : -vScroll
+//
+// The branching mirrors UIScrollView's behaviour: a page that fits its
+// viewport stays centred; a page that exceeds it is pannable, and the pan
+// offset is exposed by GetHScrollPos / GetVScrollPos.
 static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
     PTPDFViewCtrl *pdfViewCtrl, int pageNum)
 {
@@ -2927,8 +2941,8 @@ static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
         return nil;
     }
 
-    __block NSDictionary<NSString *, NSNumber *> *resultMap = nil;
-    __block double dbgX1 = 0, dbgY1 = 0, dbgX2 = 0, dbgY2 = 0;
+    __block double committedW = 0;
+    __block double committedH = 0;
     NSError *error = nil;
 
     [pdfViewCtrl DocLockReadWithBlock:^(PTPDFDoc * _Nullable doc) {
@@ -2952,40 +2966,47 @@ static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
             if (sx > maxX) maxX = sx;
             if (sy > maxY) maxY = sy;
         }
-
-        dbgX1 = minX;
-        dbgY1 = minY;
-        dbgX2 = maxX;
-        dbgY2 = maxY;
-
-        resultMap = @{
-            PTX1Key: @(minX),
-            PTY1Key: @(minY),
-            PTX2Key: @(maxX),
-            PTY2Key: @(maxY),
-            PTWidthKey: @(maxX - minX),
-            PTHeightKey: @(maxY - minY),
-        };
+        committedW = maxX - minX;
+        committedH = maxY - minY;
     } error:&error];
 
-    if (error != nil) {
+    if (error != nil || committedW <= 0 || committedH <= 0) {
         return nil;
     }
 
-    // [DEBUG-PINCH] Rate-limited trace. Remove once pinch tracking is fixed.
+    const double zs = pdfViewCtrl.zoomScale;
+    const double pageW = committedW * zs;
+    const double pageH = committedH * zs;
+    const CGSize viewportSize = pdfViewCtrl.bounds.size;
+    const double hScroll = [pdfViewCtrl GetHScrollPos];
+    const double vScroll = [pdfViewCtrl GetVScrollPos];
+
+    const double x1 = (pageW <= viewportSize.width)
+        ? (viewportSize.width - pageW) / 2.0
+        : -hScroll;
+    const double y1 = (pageH <= viewportSize.height)
+        ? (viewportSize.height - pageH) / 2.0
+        : -vScroll;
+
+    NSDictionary<NSString *, NSNumber *> *resultMap = @{
+        PTX1Key: @(x1),
+        PTY1Key: @(y1),
+        PTX2Key: @(x1 + pageW),
+        PTY2Key: @(y1 + pageH),
+        PTWidthKey: @(pageW),
+        PTHeightKey: @(pageH),
+    };
+
+    // [DEBUG-PINCH] Rate-limited trace. Remove once validated on device.
     static int callCount = 0;
-    if ((callCount++ % 3) == 0) {
-        NSLog(@"[PT_PageScreenRect] zoom=%.3f zoomScale=%.3f "
-              @"bounds.origin=(%.1f, %.1f) bounds.size=(%.1f x %.1f) "
-              @"hScroll=%.1f vScroll=%.1f "
-              @"rect=(%.1f, %.1f) -> (%.1f, %.1f) (w=%.1f h=%.1f)",
-              pdfViewCtrl.zoom,
-              pdfViewCtrl.zoomScale,
-              pdfViewCtrl.bounds.origin.x, pdfViewCtrl.bounds.origin.y,
-              pdfViewCtrl.bounds.size.width, pdfViewCtrl.bounds.size.height,
-              [pdfViewCtrl GetHScrollPos], [pdfViewCtrl GetVScrollPos],
-              dbgX1, dbgY1, dbgX2, dbgY2,
-              dbgX2 - dbgX1, dbgY2 - dbgY1);
+    if ((callCount++ % 5) == 0) {
+        NSLog(@"[PT_PageScreenRect] zoom=%.3f zoomScale=%.3f viewport=(%.1f x %.1f) "
+              @"hScroll=%.1f vScroll=%.1f committedW=%.1f committedH=%.1f → "
+              @"rect=(%.1f, %.1f) w=%.1f h=%.1f",
+              pdfViewCtrl.zoom, pdfViewCtrl.zoomScale,
+              viewportSize.width, viewportSize.height,
+              hScroll, vScroll, committedW, committedH,
+              x1, y1, pageW, pageH);
     }
 
     return resultMap;
