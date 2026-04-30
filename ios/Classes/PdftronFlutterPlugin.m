@@ -1468,10 +1468,30 @@
 
 -(void)documentController:(PTDocumentController *)docVC zoomChanged:(NSNumber*)zoom
 {
-    if (self.zoomChangedEventSink != nil)
-    {
-        self.zoomChangedEventSink(zoom);
+    if (self.zoomChangedEventSink == nil) {
+        return;
     }
+
+    // Bundle the current page's screen rect into the event payload. The
+    // platform-channel round-trip from Dart back to native is too slow to
+    // keep marker overlays glued to the page during a pinch (Flutter rebuilds
+    // are starved while the UIKit gesture is active), so we ship the rect
+    // inline with every zoom frame.
+    NSMutableDictionary *resultDict = [@{
+        @"zoom": zoom,
+    } mutableCopy];
+
+    PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
+    if (docVC.document != nil && pdfViewCtrl != nil) {
+        const int pageNum = pdfViewCtrl.currentPage;
+        NSDictionary *rectMap = PT_PageScreenRectMap(pdfViewCtrl, pageNum);
+        if (rectMap != nil) {
+            resultDict[@"pageRect"] = rectMap;
+            resultDict[@"page"] = @(pageNum);
+        }
+    }
+
+    self.zoomChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
 }
 
 -(void)documentController:(PTDocumentController *)docVC pageMoved:(NSString *)pageNumbersString
@@ -1484,20 +1504,31 @@
 
 -(void)documentController:(PTDocumentController *)docVC scrollChanged:(NSString *)scrollString
 {
-    PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
+    if (self.scrollChangedEventSink == nil) {
+        return;
+    }
 
+    PTPDFViewCtrl *pdfViewCtrl = docVC.pdfViewCtrl;
     double horizontal = [pdfViewCtrl GetHScrollPos];
     double vertical = [pdfViewCtrl GetVScrollPos];
 
-     NSDictionary *resultDict = @{
-         PTReflowOrientationHorizontalKey: [NSNumber numberWithDouble:horizontal],
-         PTReflowOrientationVerticalKey: [NSNumber numberWithDouble:vertical],
-    };
+    NSMutableDictionary *resultDict = [@{
+        PTReflowOrientationHorizontalKey: [NSNumber numberWithDouble:horizontal],
+        PTReflowOrientationVerticalKey: [NSNumber numberWithDouble:vertical],
+    } mutableCopy];
 
-    if (self.scrollChangedEventSink != nil)
-    {
-        self.scrollChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
+    // Bundle the current page's screen rect inline (see zoomChanged for the
+    // rationale — we avoid the platform-channel round-trip during pinch/scroll).
+    if (docVC.document != nil && pdfViewCtrl != nil) {
+        const int pageNum = pdfViewCtrl.currentPage;
+        NSDictionary *rectMap = PT_PageScreenRectMap(pdfViewCtrl, pageNum);
+        if (rectMap != nil) {
+            resultDict[@"pageRect"] = rectMap;
+            resultDict[@"page"] = @(pageNum);
+        }
     }
+
+    self.scrollChangedEventSink([PdftronFlutterPlugin PT_idToJSONString:resultDict]);
 }
 
 // Hygen Generated Event Listeners (5)
@@ -2867,23 +2898,28 @@
     }
 }
 
-- (void)getPageScreenRect:(NSNumber *)pageNumber resultToken:(FlutterResult)flutterResult
+// Computes the on-screen rect of a page's cropBox, in logical pixels, in the
+// viewer's screen coordinate space. Returns nil when the document is not
+// loaded or the page is invalid.
+//
+// ConvPagePtToScreenPt returns the on-screen position at Apryse's committed
+// zoom, already accounting for the live bounds.origin (UIScrollView
+// focal-point shift). During an active pinch gesture UIScrollView additionally
+// applies a transient `zoomScale` as a layer transform around the content
+// layer's origin, so the actual visual position is:
+//
+//     visual = committedScreen * zoomScale
+//
+// At rest zoomScale == 1.0 and the multiplication is a no-op.
+static NSDictionary<NSString *, NSNumber *> *PT_PageScreenRectMap(
+    PTPDFViewCtrl *pdfViewCtrl, int pageNum)
 {
-    PTDocumentController *documentController = [self getDocumentController];
-
-    // Returning nil (rather than raising an error) lets the Flutter caller
-    // poll safely while the document is still loading or after it has been
-    // closed.
-    if (documentController.document == Nil) {
-        flutterResult(nil);
-        return;
+    if (pdfViewCtrl == nil) {
+        return nil;
     }
 
-    int pageNum = [pageNumber intValue];
-    PTPDFViewCtrl *pdfViewCtrl = documentController.pdfViewCtrl;
-
-    NSError *error;
     __block NSDictionary<NSString *, NSNumber *> *resultMap = nil;
+    NSError *error = nil;
 
     [pdfViewCtrl DocLockReadWithBlock:^(PTPDFDoc * _Nullable doc) {
         PTPage *page = [doc GetPage:pageNum];
@@ -2894,16 +2930,6 @@
         double xs[4] = { [cropBox GetX1], [cropBox GetX2], [cropBox GetX2], [cropBox GetX1] };
         double ys[4] = { [cropBox GetY1], [cropBox GetY1], [cropBox GetY2], [cropBox GetY2] };
 
-        // ConvPagePtToScreenPt returns the on-screen position at Apryse's
-        // committed zoom, already accounting for the live bounds.origin
-        // (UIScrollView focal-point shift). During an active pinch gesture
-        // UIScrollView additionally applies a transient `zoomScale` as a
-        // layer transform around the content layer's origin, so the actual
-        // visual position is simply:
-        //
-        //     visual = committedScreen * zoomScale
-        //
-        // At rest zoomScale == 1.0 and the multiplication is a no-op.
         const CGFloat zs = pdfViewCtrl.zoomScale;
 
         double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
@@ -2929,12 +2955,26 @@
         };
     } error:&error];
 
-    if (error) {
-        flutterResult([FlutterError errorWithCode:@"get_page_screen_rect"
-                                          message:@"Failed to get page screen rect"
-                                          details:error.localizedDescription]);
+    if (error != nil) {
+        return nil;
+    }
+    return resultMap;
+}
+
+- (void)getPageScreenRect:(NSNumber *)pageNumber resultToken:(FlutterResult)flutterResult
+{
+    PTDocumentController *documentController = [self getDocumentController];
+
+    // Returning nil (rather than raising an error) lets the Flutter caller
+    // poll safely while the document is still loading or after it has been
+    // closed.
+    if (documentController.document == Nil) {
+        flutterResult(nil);
         return;
     }
+
+    NSDictionary<NSString *, NSNumber *> *resultMap = PT_PageScreenRectMap(
+        documentController.pdfViewCtrl, [pageNumber intValue]);
 
     if (!resultMap) {
         flutterResult(nil);
