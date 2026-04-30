@@ -2891,21 +2891,41 @@
             return;
         }
         PTPDFRect *cropBox = [page GetCropBox];
+        double xs[4] = { [cropBox GetX1], [cropBox GetX2], [cropBox GetX2], [cropBox GetX1] };
+        double ys[4] = { [cropBox GetY1], [cropBox GetY1], [cropBox GetY2], [cropBox GetY2] };
 
-        // PDFRectPage2CGRectScreen handles rotation, page positioning within
-        // the canvas, and any padding/centering applied by the viewer. Apryse
-        // uses the same internal path for hit-testing annotations, so the
-        // result tracks the live UIScrollView state (including zoomScale)
-        // during a pinch gesture.
-        const CGRect cg = [pdfViewCtrl PDFRectPage2CGRectScreen:cropBox PageNumber:pageNum];
+        // ConvPagePtToScreenPt returns the on-screen position at Apryse's
+        // committed zoom, already accounting for the live bounds.origin
+        // (UIScrollView focal-point shift). During an active pinch gesture
+        // UIScrollView additionally applies a transient `zoomScale` as a
+        // layer transform around the content layer's origin, so the actual
+        // visual position is simply:
+        //
+        //     visual = committedScreen * zoomScale
+        //
+        // At rest zoomScale == 1.0 and the multiplication is a no-op.
+        const CGFloat zs = pdfViewCtrl.zoomScale;
+
+        double minX = DBL_MAX, minY = DBL_MAX, maxX = -DBL_MAX, maxY = -DBL_MAX;
+        for (int i = 0; i < 4; i++) {
+            PTPDFPoint *pagePt = [[PTPDFPoint alloc] initWithPx:xs[i] py:ys[i]];
+            PTPDFPoint *committedScreen = [pdfViewCtrl ConvPagePtToScreenPt:pagePt
+                                                                   page_num:pageNum];
+            const double sx = [committedScreen getX] * zs;
+            const double sy = [committedScreen getY] * zs;
+            if (sx < minX) minX = sx;
+            if (sy < minY) minY = sy;
+            if (sx > maxX) maxX = sx;
+            if (sy > maxY) maxY = sy;
+        }
 
         resultMap = @{
-            PTX1Key: @(CGRectGetMinX(cg)),
-            PTY1Key: @(CGRectGetMinY(cg)),
-            PTX2Key: @(CGRectGetMaxX(cg)),
-            PTY2Key: @(CGRectGetMaxY(cg)),
-            PTWidthKey: @(CGRectGetWidth(cg)),
-            PTHeightKey: @(CGRectGetHeight(cg)),
+            PTX1Key: @(minX),
+            PTY1Key: @(minY),
+            PTX2Key: @(maxX),
+            PTY2Key: @(maxY),
+            PTWidthKey: @(maxX - minX),
+            PTHeightKey: @(maxY - minY),
         };
     } error:&error];
 
